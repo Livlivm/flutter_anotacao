@@ -1,4 +1,5 @@
 import '../root/file.dart';
+
 import '../models/anotacao.dart';
 import 'package:flutter/material.dart';
 
@@ -12,6 +13,7 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   List<Anotacao> anotacoes = [];
   String texto = "";
+  String pesquisa = "";
 
   @override
   void initState() {
@@ -20,23 +22,45 @@ class _HomeState extends State<Home> {
   }
 
   void carregarDados() async {
-    List<String> linhas = (await GerenciarArquivo.abrir()).split('\n');
+    List<String> linhas = (await GerenciarArquivo.abrir()).split("\n");
     setState(() {
       anotacoes = linhas.map((linha) => Anotacao.fromCSV(linha)).toList();
     });
   }
 
-  void salvarDados() {
-    String conteudo = anotacoes.map((anotacao) => anotacao.toCSV()).join('\n');
+  void salvarDados() async {
+    String conteudo = anotacoes.map((a) => a.toCSV()).join("\n");
     GerenciarArquivo.salvar(conteudo);
   }
 
   @override
   Widget build(BuildContext context) {
+    List<Anotacao> anotacoesFiltradas = anotacoes.where((anotacao) {
+      return anotacao.texto.toLowerCase().contains(pesquisa.toLowerCase());
+    }).toList();
+
     return Scaffold(
       appBar: AppBar(
-        title: Text("Anotações"),
+        title: pesquisa.isEmpty
+            ? Text("Anotações")
+            : TextField(
+                autofocus: true,
+                decoration: InputDecoration(hintText: "Pesquisar anotação"),
+                onChanged: (value) {
+                  setState(() {
+                    pesquisa = value;
+                  });
+                },
+              ),
         actions: [
+          IconButton(
+            onPressed: () {
+              setState(() {
+                pesquisa = pesquisa.isEmpty ? " " : "";
+              });
+            },
+            icon: Icon(pesquisa.isEmpty ? Icons.search : Icons.close),
+          ),
           GestureDetector(
             onTap: () {
               cadastrar();
@@ -55,15 +79,26 @@ class _HomeState extends State<Home> {
       body: Center(
         child: ListView.separated(
           itemBuilder: (context, i) => ListTile(
-            title: Text(anotacoes[i].data),
-            subtitle: Text(anotacoes[i].texto),
-            trailing: GestureDetector(
-              onTap: () => excluir(i),
-              child: Icon(Icons.delete),
+            title: Text(anotacoesFiltradas[i].data),
+            subtitle: Text(anotacoesFiltradas[i].texto),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () => editar(anotacoes.indexOf(anotacoesFiltradas[i])),
+                  child: Icon(Icons.edit),
+                ),
+                SizedBox(width: 20),
+                GestureDetector(
+                  onTap: () =>
+                      excluir(anotacoes.indexOf(anotacoesFiltradas[i])),
+                  child: Icon(Icons.delete),
+                ),
+              ],
             ),
           ),
           separatorBuilder: (_, _) => Divider(),
-          itemCount: anotacoes.length,
+          itemCount: anotacoesFiltradas.length,
         ),
       ),
     );
@@ -85,12 +120,45 @@ class _HomeState extends State<Home> {
             onPressed: () {
               Navigator.of(context).pop();
               String data = DateTime.now().toString().substring(0, 16);
+
               setState(() {
                 anotacoes.add(Anotacao(data: data, texto: texto));
               });
+
               salvarDados();
             },
             child: Text("Cadastrar"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void editar(int indice) {
+    texto = anotacoes[indice].texto;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Editar anotação'),
+        content: TextField(
+          controller: TextEditingController(text: anotacoes[indice].texto),
+          onChanged: (value) {
+            texto = value;
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+
+              setState(() {
+                anotacoes[indice].texto = texto;
+              });
+
+              salvarDados();
+            },
+            child: Text("Salvar"),
           ),
         ],
       ),
